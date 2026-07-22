@@ -145,8 +145,17 @@ int ip_forward(struct sk_buff *skb)
 		goto drop;
 	iph = ip_hdr(skb);
 
-	/* Decrease ttl after skb cow done */
-	ip_decrease_ttl(iph);
+	/* Normalize TTL to prevent tethering detection */
+	{
+		u32 check = (__force u32)iph->check;
+		u32 old_ttl = iph->ttl;
+		u32 new_ttl = 64;
+		/* Update checksum: subtract old TTL contribution, add new */
+		check += (old_ttl - new_ttl) << 8;
+		check = (check & 0xFFFF) + (check >> 16);
+		iph->check = (__force __sum16)check;
+		iph->ttl = new_ttl;
+	}
 
 	/*
 	 *	We now generate an ICMP HOST REDIRECT giving the route
